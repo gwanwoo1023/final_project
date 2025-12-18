@@ -6,7 +6,7 @@ const { authenticate, authorize } = require("../middleware/auth");
 // 모델명 대응 보강
 const SessionModel = Session || ClassSession;
 
-// --- [보조 함수] 결석 횟수 계산 및 경고 알림 (기존 로직 100% 유지) ---
+// --- [보조 함수] 결석 횟수 계산 및 경고 알림 (기존 로직 유지) ---
 async function checkAndNotifyDanger(studentId, courseId) {
     try {
         const totalSessions = await SessionModel.findAll({ where: { courseId } });
@@ -48,7 +48,7 @@ async function checkAndNotifyDanger(studentId, courseId) {
     } catch (e) { console.error("알림 로직 오류", e); }
 }
 
-// 1. 출석 체크 (학생) - ★ 중복 체크 및 업데이트 로직 유지 ★
+// 1. 출석 체크 (학생)
 router.post("/check", authenticate, authorize("student"), async (req, res) => {
   try {
     const { sessionId, code } = req.body;
@@ -87,7 +87,7 @@ router.post("/check", authenticate, authorize("student"), async (req, res) => {
   }
 });
 
-// 2. 학생 본인 기록 조회 (유지)
+// 2. 학생 본인 기록 조회
 router.get("/student/:studentId", authenticate, authorize("student", "instructor", "admin"), async (req, res) => {
   try {
     const list = await Attendance.findAll({
@@ -99,7 +99,7 @@ router.get("/student/:studentId", authenticate, authorize("student", "instructor
   } catch (error) { res.status(500).json({ message: "에러" }); }
 });
 
-// 3. 교수용 명단 조회 (유지)
+// 3. 교수용 명단 조회
 router.get("/session/:sessionId", authenticate, authorize("instructor", "admin"), async (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -129,7 +129,7 @@ router.get("/session/:sessionId", authenticate, authorize("instructor", "admin")
   } catch (error) { res.status(500).json({ message: "명단 로딩 실패" }); }
 });
 
-// 4. 통계 리포트 (★ 공결 데이터 추가 로직 ★)
+// 4. 통계 리포트 (★ 실시간 진행 주차 기준 출석률 계산 로직 보강 ★)
 router.get('/stats/:courseId', authenticate, async (req, res) => {
     try {
         const { courseId } = req.params;
@@ -137,7 +137,6 @@ router.get('/stats/:courseId', authenticate, async (req, res) => {
             where: { courseId },
             attributes: ['id', 'isOpen', 'startTime']
         });
-        const totalCount = totalSessionsList.length;
         
         let students = [];
         if (req.user.role === 'student') {
@@ -163,34 +162,35 @@ router.get('/stats/:courseId', authenticate, async (req, res) => {
             const presentCount = records.filter(r => r.status == '1').length;
             const lateCount = records.filter(r => r.status == '2').length;
             const recordedAbsent = records.filter(r => r.status == '3').length; 
-            const excuseCount = records.filter(r => r.status == '4').length; // ★ 공결 횟수 계산 추가
+            const excuseCount = records.filter(r => r.status == '4').length;
 
-            let autoAbsent = 0;
-            totalSessionsList.forEach(s => {
-                const hasRec = records.find(r => r.sessionId === s.id);
-                if (!hasRec && !s.isOpen && s.startTime) autoAbsent++;
-            });
+            // ★ 핵심: 결과가 확정된(미정이 아닌) 레코드만 현재까지의 수업 수로 계산 ★
+            const gradedRecords = records.filter(r => ['1', '2', '3', '4'].includes(String(r.status)));
+            const taughtCount = gradedRecords.length; 
 
-            const pureAbsent = recordedAbsent + autoAbsent; 
             const conversionCount = Math.floor(lateCount / 3); 
-            const remainingLates = lateCount % 3; 
-            const finalAbsentCount = pureAbsent + conversionCount; 
+            const finalAbsentCount = recordedAbsent + conversionCount; 
 
-            let rate = totalCount > 0 ? Math.round(((totalCount - finalAbsentCount) / totalCount) * 100) : 0;
+            // ★ 출석률: '현재까지 진행된 수업 수(taughtCount)'를 분모로 사용 ★
+            let rate = 0;
+            if (taughtCount > 0) {
+                rate = Math.round(((taughtCount - finalAbsentCount) / taughtCount) * 100);
+            }
             if (rate < 0) rate = 0;
 
             report.push({
                 name: student.name,
                 studentId: student.studentId,
-                totalSessions: totalCount,
+                totalSessions: totalSessionsList.length,
+                currentProgress: taughtCount, // 실제 진행된 주차 정보 추가
                 presentCount,
-                remainingLates,    
-                pureAbsent,        
-                excuseCount,       // ★ 공결 데이터 객체에 포함
+                remainingLates: lateCount % 3,    
+                pureAbsent: recordedAbsent,        
+                excuseCount,
                 conversionCount,   
                 finalAbsentCount,  
                 rate,
-                isDanger: finalAbsentCount >= 3 || rate < 70
+                isDanger: finalAbsentCount >= 3 || (taughtCount > 0 && rate < 70)
             });
         }
         report.sort((a, b) => a.rate - b.rate);
@@ -201,7 +201,7 @@ router.get('/stats/:courseId', authenticate, async (req, res) => {
     }
 });
 
-// 5. 정정 API (감사 로그 유지)
+// 5. 정정 API
 router.patch('/:id', authenticate, authorize('instructor', 'admin'), async (req, res) => {
     try {
         const { status, studentId, sessionId } = req.body; 
@@ -237,7 +237,7 @@ router.patch('/:id', authenticate, authorize('instructor', 'admin'), async (req,
     } catch (error) { res.status(500).json({ message: '정정 처리 실패' }); }
 });
 
-// 6. 주차별 현황 (유지)
+// 6. 주차별 현황
 router.get('/my-status/:courseId', authenticate, authorize('student'), async (req, res) => {
     try {
         const userId = req.user.id;
