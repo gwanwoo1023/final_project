@@ -1,0 +1,1864 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>통합 스마트 출석 시스템</title>
+  <style>
+    body { font-family: 'Noto Sans KR', sans-serif; padding: 20px; max-width: 1100px; margin: 0 auto; background-color: #f4f4f9; }
+    h1, h3, h4 { color:#333; margin: 10px 0; }
+    .card { background:#fff; border:1px solid #ddd; padding:15px; margin-bottom:15px; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,0.07); }
+    .row { display:flex; gap:12px; flex-wrap: wrap; }
+    .col { flex:1; min-width: 260px; }
+    .muted { color:#777; }
+    .pill { display:inline-block; padding:2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #ddd; background:#fafafa; margin-left:6px; }
+    .noti-unread { background-color:#fffbe6; border-left: 4px solid #ff9800; }
+    .noti-read { opacity: 0.65; }
+
+    /* 버튼 */
+    button { cursor:pointer; border:none; border-radius:6px; padding:8px 14px; font-weight:700; }
+    .btn-primary { background:#008CBA; color:#fff; }
+    .btn-success { background:#4CAF50; color:#fff; }
+    .btn-danger  { background:#f44336; color:#fff; }
+    .btn-warning { background:#ff9800; color:#fff; }
+    .btn-dark    { background:#555; color:#fff; }
+    .btn-ghost   { background:#f5f5f5; color:#333; border:1px solid #ddd; }
+
+    input, select, textarea { width: 100%; box-sizing:border-box; padding: 8px; margin: 6px 0; border:1px solid #ccc; border-radius:6px; }
+    textarea { min-height: 70px; resize: vertical; }
+
+    /* 탭 */
+    .tab { overflow:hidden; border-bottom:1px solid #ccc; margin: 18px 0 20px; }
+    .tab button { background:inherit; float:left; border:none; outline:none; padding: 14px 16px; color:#666; font-weight:800; border-radius:0; }
+    .tab button:hover { background:#ddd; }
+    .tab button.active { background:#fff; border:1px solid #ccc; border-bottom:none; color:#000; }
+    .tab-content { display:none; }
+
+    /* 테이블 */
+    table { width:100%; border-collapse: collapse; margin-top: 10px; font-size: 0.92em; }
+    th, td { border:1px solid #ddd; padding: 8px; text-align:center; vertical-align: middle; }
+    th { background:#f2f2f2; }
+    td.left { text-align:left; }
+
+    .topbar { display:flex; justify-content: space-between; align-items: center; gap:12px; }
+    .logout-btn { padding: 7px 12px; }
+
+    .badge-green { color:#2e7d32; font-weight:800; }
+    .badge-orange { color:#ef6c00; font-weight:800; }
+    .badge-red { color:#c62828; font-weight:800; }
+    .badge-blue { color:#1565c0; font-weight:800; }
+
+    /* [추가됨] 스마트 스케줄러용 뱃지 스타일 */
+    .tag-holiday { background:#ffebee; color:#c62828; border:1px solid #ffcdd2; padding:2px 6px; border-radius:4px; font-size:11px; margin-right:5px; font-weight: bold; }
+    .tag-date { background:#e3f2fd; color:#1565c0; border:1px solid #bbdefb; padding:2px 6px; border-radius:4px; font-size:11px; margin-right:5px; }
+
+    .hr { height:1px; background:#eee; margin: 14px 0; }
+    .tiny { font-size: 12px; }
+    .right { text-align:right; }
+
+    /* 채팅방 스타일 */
+    .chat-container { display:flex; height: 500px; border:1px solid #ddd; border-radius:8px; overflow:hidden; background:#fff; }
+    .chat-sidebar { width: 280px; background:#f9f9f9; border-right:1px solid #ddd; display:flex; flex-direction:column; }
+    .chat-main { flex:1; display:flex; flex-direction:column; background:#fff; }
+    .user-list { flex:1; overflow-y:auto; }
+    .user-item { padding:12px; border-bottom:1px solid #eee; cursor:pointer; }
+    .user-item:hover, .user-item.active { background:#e3f2fd; }
+    .chat-messages { flex:1; overflow-y:auto; padding:15px; background:#f0f2f5; display:flex; flex-direction:column; gap:10px; }
+    .message-bubble { max-width:70%; padding:10px 14px; border-radius:15px; font-size:14px; line-height:1.4; position:relative; word-wrap: break-word; }
+    .msg-mine { align-self:flex-end; background:#fee500; color:#000; border-top-right-radius: 0; }
+    .msg-other { align-self:flex-start; background:#fff; border:1px solid #ddd; border-top-left-radius: 0; }
+    .msg-info { font-size:11px; color:#888; margin-bottom:2px; }
+    .chat-input-area { padding:10px; border-top:1px solid #ddd; display:flex; gap:10px; background:#fff; }
+  </style>
+</head>
+<body>
+  <h1>🏫 통합 스마트 출석 시스템</h1>
+
+  {% if user %}
+    <div class="topbar">
+      <h3>
+        반갑습니다, <span style="color:#008CBA;">{{ user.name }}</span>
+        <small class="muted">({{ user.role }})</small>
+      </h3>
+      <button class="btn-dark logout-btn" onclick="logout()">로그아웃</button>
+    </div>
+
+    <div class="tab">
+      <button class="tablinks active" onclick="openTab(event,'Lecture')">📚 강의/출석</button>
+      <button class="tablinks" onclick="openTab(event,'Excuse')">📝 공결</button>
+      <button class="tablinks" onclick="openTab(event,'Notice')">📢 공지</button>
+      <button class="tablinks" onclick="openTab(event,'Offvote')">📊 투표</button>
+      <button class="tablinks" onclick="openTab(event,'Report')">📈 리포트</button>
+      <button class="tablinks" onclick="openTab(event,'Message')">💬 메시지</button>
+      
+      {% if user.role == 'admin' %}
+        <button class="tablinks" onclick="openTab(event,'Admin')">🛠️ 관리자</button>
+        <button class="tablinks" onclick="openTab(event,'Audit')">🔒 감사 로그</button>
+      {% endif %}
+      <button class="tablinks" onclick="openTab(event,'Notification')">🔔 알림</button>
+    </div>
+
+    <div id="Lecture" class="tab-content" style="display:block;">
+      <div class="card">
+        <h4>📋 강의 목록</h4>
+        <div id="courseList" class="muted">로딩 중...</div>
+      </div>
+    </div>
+
+    <div id="Excuse" class="tab-content">
+      {% if user.role == 'student' %}
+        <div class="card">
+          <h4>📝 공결 신청하기</h4>
+          <form id="excuseForm" enctype="multipart/form-data">
+            <input type="text" name="reason" placeholder="사유 (예: 병원 진료)" required/>
+            <input type="file" name="file" />
+            <button type="submit" class="btn-success">신청</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h4>📂 내 신청 내역</h4>
+          <div id="myExcuseList" class="muted">불러오는 중...</div>
+        </div>
+      {% endif %}
+
+      {% if user.role == 'instructor' or user.role == 'admin' %}
+        <div class="card">
+          <h4>👨‍🏫 결재 대기 목록</h4>
+          <div id="pendingExcuseList" class="muted">불러오는 중...</div>
+        </div>
+      {% endif %}
+    </div>
+
+    <div id="Notice" class="tab-content">
+      {% if user.role == 'instructor' or user.role == 'admin' %}
+        <div class="card">
+          <h4>📢 공지 작성</h4>
+          <form id="noticeForm">
+            <label class="tiny muted">대상 강의</label>
+            <select id="noticeCourseSelect" name="courseId" required>
+              <option value="">강의를 선택하세요</option>
+            </select>
+            <input type="text" name="title" placeholder="제목" required />
+            <textarea name="content" placeholder="내용" required></textarea>
+            <button type="submit" class="btn-primary">등록</button>
+          </form>
+        </div>
+      {% endif %}
+
+      <div class="card">
+        <h4>📢 공지 목록</h4>
+        <div id="noticeList" class="muted">불러오는 중...</div>
+      </div>
+    </div>
+
+    <div id="Offvote" class="tab-content">
+      {% if user.role == 'instructor' or user.role == 'admin' %}
+        <div class="card">
+          <h4>📊 투표 만들기</h4>
+          <form id="offvoteForm">
+            <label class="tiny muted">대상 강의</label>
+            <select id="offvoteCourseSelect" name="courseId">
+              <option value="">(선택) 강의 지정</option>
+            </select>
+            <input type="text" name="title" placeholder="투표 제목" required />
+            <textarea name="description" placeholder="설명(선택)"></textarea>
+            <textarea name="options" placeholder="선택지 (줄바꿈으로 여러 개 입력)" required></textarea>
+            <button type="submit" class="btn-primary">생성</button>
+          </form>
+        </div>
+      {% endif %}
+
+      <div class="card">
+        <h4>📊 투표 목록</h4>
+        <div id="offvoteList" class="muted">불러오는 중...</div>
+      </div>
+    </div>
+
+    <div id="Report" class="tab-content">
+      <div class="card">
+        <h4>📈 출석 리포트</h4>
+        <div class="tiny muted">
+          * 수업 시작 후 10분이 지나면 지각 처리됩니다. (지각 3회 = 결석 1회)
+        </div>
+
+        <div style="margin-top:10px;">
+          <select id="reportCourseSelect" onchange="loadAttendanceReport()">
+            <option value="">강의를 선택하세요</option>
+          </select>
+        </div>
+
+        <div id="reportResult" class="muted" style="margin-top:10px;">
+          강의를 선택하면 리포트가 표시됩니다.
+        </div>
+      </div>
+
+      {% if user.role == 'admin' %}
+        <div class="card">
+          <h4>🧾 관리자 리포트 (요약)</h4>
+          <button class="btn-primary" onclick="loadAdminReport()">요약 불러오기</button>
+          <div id="adminReportBox" class="muted" style="margin-top:10px;">-</div>
+        </div>
+      {% endif %}
+    </div>
+
+    <div id="Message" class="tab-content">
+      <div class="card" style="padding:0; overflow:hidden;">
+        <div style="padding:15px; border-bottom:1px solid #ddd; background:#f8f9fa;">
+          <h4>💬 1:1 메시지 (출석 정정/문의)</h4>
+          <select id="msgCourseSelect" onchange="loadChatTargets()" style="max-width:300px;">
+            <option value="">강의를 선택하세요</option>
+          </select>
+        </div>
+        
+        <div class="chat-container">
+          <div class="chat-sidebar">
+            <div style="padding:10px; border-bottom:1px solid #eee; font-weight:bold; color:#555;">
+              대화 상대
+            </div>
+            <div id="msgTargetList" class="user-list">
+              <div style="padding:15px; color:#999; font-size:13px; text-align:center;">강의를 먼저 선택하세요</div>
+            </div>
+          </div>
+
+          <div class="chat-main">
+            <div id="chatBox" class="chat-messages">
+              <div style="text-align:center; color:#999; margin-top:50px;">
+                왼쪽에서 대화 상대를 선택하면<br>채팅이 시작됩니다.
+              </div>
+            </div>
+            <div class="chat-input-area">
+              <input type="text" id="msgInput" placeholder="메시지를 입력하세요 (Enter로 전송)" onkeypress="if(event.key==='Enter') sendMsg()">
+              <button class="btn-primary" onclick="sendMsg()">전송</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if user.role == 'admin' %}
+      <div id="Admin" class="tab-content">
+        <div class="card" style="border-left: 5px solid #673AB7; margin-bottom: 20px;">
+          <h4 style="color:#673AB7;">📚 과목 개설 (관리자 전용)</h4>
+          <div class="row">
+            <div class="col">
+              <label class="tiny muted">과목명</label>
+              <input id="newCourseName" type="text" placeholder="예: 웹프로그래밍 기초" />
+            </div>
+            <div class="col">
+              <label class="tiny muted">담당 교수</label>
+              <select id="newCourseInstructor">
+                <option value="">교수님을 선택하세요</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col">
+              <label class="tiny muted">학과</label>
+              <select id="newCourseDept">
+                <option value="">학과 선택 (선택사항)</option>
+              </select>
+            </div>
+            <div class="col">
+              <label class="tiny muted">학기</label>
+              <select id="newCourseSem">
+                <option value="">학기 선택 (선택사항)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px; background:#f5f5f5; padding:10px; border-radius:6px; border:1px solid #ddd;">
+            <div class="col">
+              <label class="tiny muted" style="font-weight:bold; color:#555;">📅 수업 요일</label>
+              <select id="newCourseDay">
+                <option value="1">월요일</option>
+                <option value="2">화요일</option>
+                <option value="3">수요일</option>
+                <option value="4">목요일</option>
+                <option value="5">금요일</option>
+                <option value="6">토요일</option>
+              </select>
+            </div>
+            <div class="col">
+              <label class="tiny muted" style="font-weight:bold; color:#555;">🚀 개강 시작일 (1주차)</label>
+              <input id="newCourseStart" type="date" value="2025-09-01" />
+            </div>
+          </div>
+      
+          <button class="btn-primary" style="margin-top:10px; width:100%; background-color:#673AB7;" onclick="createAdminCourse()">과목 개설 및 교수 배정</button>
+        </div>
+
+        <div class="card" style="border-left: 5px solid #008CBA; margin-bottom: 20px;">
+          <h4 style="color:#008CBA;">👥 사용자 등록 (관리자용)</h4>
+          <div class="row">
+            <div class="col">
+              <input id="newUserNameUser" placeholder="이름 (예: 홍길동)" />
+            </div>
+            <div class="col">
+              <input id="newUserEmail" placeholder="이메일" />
+            </div>
+            <div class="col">
+              <input id="newUserPwd" type="password" placeholder="비밀번호" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="col">
+              <input id="newUserStdId" placeholder="학번/교번 (선택)" />
+            </div>
+            <div class="col">
+              <select id="newUserRole">
+                <option value="student">학생 (Student)</option>
+                <option value="instructor">교수 (Instructor)</option>
+              </select>
+            </div>
+            <div class="col">
+              <button class="btn-primary" style="width:100%; margin-top:6px;" onclick="createAdminUser()">사용자 등록</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col">
+            <div class="card">
+              <h4>🏷️ 학과(Departments)</h4>
+              <div class="row">
+                <div class="col">
+                  <input id="deptName" placeholder="학과명 (필수)"/>
+                  <input id="deptCode" placeholder="학과코드 (선택)"/>
+                  <button class="btn-success" onclick="createDepartment()">학과 생성</button>
+                </div>
+              </div>
+              <div class="hr"></div>
+              <button class="btn-ghost" onclick="loadDepartments()">목록 새로고침</button>
+              <div id="deptList" class="muted" style="margin-top:10px;">-</div>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="card">
+              <h4>🗓️ 학기(Semesters)</h4>
+              <input id="semName" placeholder="학기명 (예: 2025-2)"/>
+              <input id="semStart" type="date" placeholder="시작일"/>
+              <input id="semEnd" type="date" placeholder="종료일"/>
+              <button class="btn-success" onclick="createSemester()">학기 생성</button>
+              <div class="hr"></div>
+              <button class="btn-ghost" onclick="loadSemesters()">목록 새로고침</button>
+              <div id="semList" class="muted" style="margin-top:10px;">-</div>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="card">
+  <h4>⚙️ 시스템 설정</h4>
+  <div class="tiny muted" style="margin-bottom:12px;">
+    지각이 몇 번 쌓이면 결석으로 칠지, 결석이 몇 번이면 경고를 줄지 설정합니다.
+  </div>
+  <div style="background:#f9f9f9; padding:12px; border-radius:8px; border:1px solid #eee;">
+    <label class="tiny" style="font-weight:bold; color:#555;">1. 지각 변환 기준</label>
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <span>지각</span>
+      <input type="number" id="lateToAbsentInput" placeholder="3" style="width:60px; text-align:center; margin:0;">
+      <span>회 = 결석 1회</span>
+    </div>
+    <label class="tiny" style="font-weight:bold; color:#555;">2. F학점 경고 기준</label>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span>결석</span>
+      <input type="number" id="warningThresholdInput" placeholder="3" style="width:60px; text-align:center; margin:0;">
+      <span>회 이상 시 경고</span>
+    </div>
+  </div>
+  <div style="margin-top:12px;">
+    <button class="btn-warning" style="width:100%" onclick="saveSystemSettings()">규칙 저장</button>
+  </div>
+</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col">
+            <div class="card">
+              <h4>👥 사용자 & 📚 과목 목록</h4>
+              
+              <div id="courseEditCard" class="card" style="display:none; border-left: 5px solid #ff9800; background:#fff3e0; margin-bottom:15px;">
+                <h4 style="color:#ef6c00;">✏️ 과목 수정</h4>
+                <input type="hidden" id="editCourseId">
+                
+                <label class="tiny muted">과목명</label>
+                <input id="editCourseName" type="text" placeholder="과목명" style="background:#fff;">
+                
+                <div class="row">
+                  <div class="col">
+                    <label class="tiny muted">담당 교수</label>
+                    <select id="editCourseInstructor" style="background:#fff;"><option value="">로딩 중...</option></select>
+                  </div>
+                  <div class="col">
+                    <label class="tiny muted">학과</label>
+                    <select id="editCourseDept" style="background:#fff;"><option value="">로딩 중...</option></select>
+                  </div>
+                  <div class="col">
+                    <label class="tiny muted">학기</label>
+                    <select id="editCourseSem" style="background:#fff;"><option value="">로딩 중...</option></select>
+                  </div>
+                </div>
+
+                <div style="margin-top:10px; text-align:right;">
+                  <button class="btn-warning" onclick="saveCourseChanges()">수정 저장</button>
+                  <button class="btn-ghost" onclick="closeCourseEditor()">취소</button>
+                </div>
+              </div>
+              <div class="row" style="margin-top:10px;">
+                <div class="col">
+                  <button class="btn-ghost" onclick="loadAdminUsers()">사용자 목록</button>
+                  <div id="adminUsersBox" class="muted" style="margin-top:10px;">-</div>
+                </div>
+                <div class="col">
+                  <button class="btn-ghost" onclick="loadAdminCourses()">과목 목록</button>
+                  <div id="adminCoursesBox" class="muted" style="margin-top:10px;">-</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="Audit" class="tab-content">
+        <div class="card">
+          <h4>🔒 감사 로그</h4>
+          <div class="row">
+            <div class="col">
+              <input id="auditLimit" type="number" placeholder="limit (기본 100)" />
+            </div>
+            <div class="col">
+              <button class="btn-primary" onclick="loadAuditLogs()">불러오기</button>
+            </div>
+          </div>
+          <div id="auditList" class="muted" style="margin-top:10px;">-</div>
+        </div>
+      </div>
+    {% endif %}
+
+    <div id="Notification" class="tab-content">
+      <div class="card">
+        <h4>🔔 내 알림</h4>
+        <div class="row">
+          <div class="col">
+            <button class="btn-primary" onclick="loadNotifications()">새로고침</button>
+            <button class="btn-ghost" onclick="markAllNotificationsRead()">모두 읽음</button>
+          </div>
+        </div>
+        <div id="notificationList" class="muted" style="margin-top:10px;">불러오는 중...</div>
+      </div>
+    </div>
+
+  {% else %}
+    <div class="card" style="text-align:center; margin-top:90px;">
+      <h3>로그인이 필요합니다.</h3>
+      <a href="/login"><button class="btn-primary" style="font-size:1.1em;">로그인</button></a>
+      <div style="margin-top:10px;">
+        <a href="/join" class="muted">회원가입</a>
+      </div>
+    </div>
+  {% endif %}
+
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+  <script>
+    const userRole = "{% if user %}{{ user.role }}{% else %}{% endif %}";
+    const userId   = "{% if user %}{{ user.id }}{% else %}{% endif %}";
+
+    function openTab(evt, tabName) {
+      // 1. 모든 탭 내용 숨기기
+      const tabcontent = document.getElementsByClassName("tab-content");
+      for (let i = 0; i < tabcontent.length; i++) {
+        tabcontent[i].style.display = "none";
+      }
+
+      // 2. 모든 탭 버튼 비활성화
+      const tablinks = document.getElementsByClassName("tablinks");
+      for (let i = 0; i < tablinks.length; i++) {
+        tablinks[i].className = tablinks[i].className.replace(" active", "");
+      }
+
+      // 3. 선택한 탭 보여주기
+      document.getElementById(tabName).style.display = "block";
+      evt.currentTarget.className += " active";
+
+      // ★★★ [여기가 핵심!] 관리자 탭을 누르면, 데이터를 강제로 가져오게 시킵니다. ★★★
+      if (tabName === 'Admin') {
+        console.log("관리자 탭 클릭: 데이터 로딩 시작");
+        loadAdminCourseOptions(); // 교수, 학과, 학기 선택창 채우기
+        loadAdminUsers();         // 사용자 목록 채우기
+        loadAdminCourses();       // 과목 목록 채우기
+        loadDepartments();        // 학과 목록 채우기
+        loadSemesters();          // 학기 목록 채우기
+      }
+    }
+
+    async function logout() {
+      try { await axios.post('/auth/logout'); }
+      finally { location.href = '/login'; }
+    }
+
+    // ======================
+    // 초기 로딩
+    // ======================
+    if (userRole) {
+      loadCourses();
+      loadNotices();
+      loadOffvotes();
+      loadNotifications();
+
+      if (userRole === 'student') loadMyExcuses();
+      if (userRole === 'instructor' || userRole === 'admin') loadPendingExcuses();
+
+      if (userRole === 'admin') {
+        loadDepartments();
+        loadSemesters();
+        loadSystemRules();
+        loadAdminCourseOptions();
+      }
+    }
+
+    // ======================
+    // 강의
+    // ======================
+    async function loadCourses() {
+      try {
+        const res = await axios.get('/courses');
+        const courses = res.data || [];
+        const list = document.getElementById('courseList');
+
+        if (!courses.length) {
+          list.innerHTML = '<p class="muted">등록된 강의가 없습니다.</p>';
+          fillCourseSelects([]);
+          return;
+        }
+
+        list.innerHTML = courses.map(c => `
+          <div class="card" style="border-left:5px solid #008CBA;">
+            <div class="row" style="align-items:center;">
+              <div class="col">
+                <h3 style="margin:0;">📚 ${escapeHtml(c.name)}</h3>
+                <div class="tiny muted">
+                  교수: ${c.instructor ? escapeHtml(c.instructor.name) : '-'}
+                  ${c.department ? `<span class="pill">학과: ${escapeHtml(c.department.name)}</span>` : ''}
+                  ${c.semester ? `<span class="pill">학기: ${escapeHtml(c.semester.name)}</span>` : ''}
+                </div>
+              </div>
+              <div class="col right">
+                ${(userRole === 'instructor' || userRole === 'admin') ? 
+                  `<button class="btn-success" style="margin-right:4px;" onclick="openEnrollManager(${c.id}, '${escapeHtml(c.name)}')">👥 수강생 관리</button>` : ''}
+                <button class="btn-primary" onclick="toggleSessions(${c.id})">수업 목록</button>
+              </div>
+            </div>
+            <div id="enroll-box-${c.id}" style="display:none; margin-top:10px; background:#f1f8e9; padding:12px; border:1px solid #c5e1a5;"></div>
+            <div id="sessions-${c.id}" style="display:none; margin-top:10px;"></div>
+          </div>
+        `).join('');
+
+        fillCourseSelects(courses);
+      } catch (err) {
+        console.error(err);
+        document.getElementById('courseList').innerHTML = '<p class="badge-red">강의 목록을 불러오지 못했습니다.</p>';
+        fillCourseSelects([]);
+      }
+    }
+
+    // ★★★ [수정됨] 수강생 관리: 학번 입력 대신 "전체 학생 목록" 보여주기 ★★★
+    async function openEnrollManager(courseId, courseName) {
+      const box = document.getElementById(`enroll-box-${courseId}`);
+      if (!box) return;
+
+      if (box.style.display === 'block') {
+        box.style.display = 'none';
+        return;
+      }
+
+      box.style.display = 'block';
+      box.innerHTML = `
+        <div style="border-bottom:1px solid #c5e1a5; padding-bottom:8px; margin-bottom:8px;">
+          <b>👥 '${courseName}' 수강생 관리</b>
+        </div>
+        
+        <h5 class="muted" style="margin:5px 0;">✅ 현재 등록된 수강생</h5>
+        <div id="enroll-list-${courseId}" class="tiny">불러오는 중...</div>
+
+        <div class="hr" style="margin:15px 0;"></div>
+
+        <h5 class="muted" style="margin:5px 0;">➕ 학생 추가 (전체 목록)</h5>
+        <button class="btn-primary" style="width:100%;" onclick="loadAllCandidates(${courseId})">학생 목록 불러오기</button>
+        <div id="candidate-list-${courseId}" style="margin-top:10px; max-height:200px; overflow-y:auto; border:1px solid #ddd; display:none;"></div>
+      `;
+      loadEnrolledStudents(courseId);
+    }
+
+    async function loadEnrolledStudents(courseId) {
+      const listBox = document.getElementById(`enroll-list-${courseId}`);
+      try {
+        const res = await axios.get(`/enrollment/${courseId}`);
+        const students = res.data || [];
+
+        if (!students.length) {
+          listBox.innerHTML = '<span class="muted">등록된 수강생이 없습니다.</span>';
+          return;
+        }
+
+        listBox.innerHTML = `
+          <table style="background:#fff;">
+            <thead><tr><th>이름</th><th>학번</th><th>관리</th></tr></thead>
+            <tbody>
+              ${students.map(s => `
+                <tr>
+                  <td>${escapeHtml(s.name)}</td>
+                  <td>${escapeHtml(s.studentId)}</td>
+                  <td><button class="btn-danger" style="padding:2px 6px; font-size:11px;" onclick="removeStudentFromCourse(${courseId}, ${s.id}, '${escapeHtml(s.name)}')">삭제</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        listBox.innerHTML = '목록 로드 실패';
+      }
+    }
+
+    // ★ [추가] 전체 학생 목록 불러와서 보여주기
+    async function loadAllCandidates(courseId) {
+      const box = document.getElementById(`candidate-list-${courseId}`);
+      box.style.display = 'block';
+      box.innerHTML = '<div class="tiny muted" style="padding:5px;">불러오는 중...</div>';
+
+      try {
+        const res = await axios.get('/enrollment/list/candidates');
+        const students = res.data || [];
+
+        if (!students.length) {
+          box.innerHTML = '<div class="tiny muted" style="padding:5px;">학생이 없습니다.</div>';
+          return;
+        }
+
+        box.innerHTML = `
+          <table style="background:#fff; font-size:12px;">
+            <thead><tr><th>이름</th><th>학번</th><th>이메일</th><th>추가</th></tr></thead>
+            <tbody>
+              ${students.map(s => `
+                <tr>
+                  <td>${escapeHtml(s.name)}</td>
+                  <td>${escapeHtml(s.studentId)}</td>
+                  <td>${escapeHtml(s.email)}</td>
+                  <td><button class="btn-success" style="padding:2px 6px; font-size:11px;" onclick="addStudentToCourse(${courseId}, '${s.studentId}')">선택</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        box.innerHTML = '<div class="tiny badge-red" style="padding:5px;">실패</div>';
+      }
+    }
+
+    async function addStudentToCourse(courseId, studentIdStr) {
+      try {
+        const res = await axios.post('/enrollment/add', { courseId, studentIdStr });
+        alert(res.data.message);
+        loadEnrolledStudents(courseId); // 수강생 목록 갱신
+      } catch (err) {
+        alert(err.response?.data?.message || '추가 실패');
+      }
+    }
+
+    async function removeStudentFromCourse(courseId, userId, userName) {
+      if (!confirm(`'${userName}' 학생을 수강 취소하시겠습니까?`)) return;
+      try {
+        await axios.post('/enrollment/remove', { courseId, userId });
+        loadEnrolledStudents(courseId);
+      } catch (err) {
+        alert('삭제 실패');
+      }
+    }
+
+    function fillCourseSelects(courses) {
+      const baseOpt = (placeholder) => `<option value="">${placeholder}</option>`;
+      const options = courses.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+
+      // ★ [수정] 메시지용 선택창 포함
+      ['noticeCourseSelect', 'offvoteCourseSelect', 'reportCourseSelect', 'msgCourseSelect'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = baseOpt('강의를 선택하세요') + options;
+      });
+    }
+
+    // ======================
+    // ★★★ [추가] 메시지/채팅 기능 ★★★
+    // ======================
+    let currentChatTargetId = null;
+    let currentChatCourseId = null;
+    let chatInterval = null;
+
+    async function loadChatTargets() {
+      const courseId = document.getElementById('msgCourseSelect').value;
+      const targetList = document.getElementById('msgTargetList');
+      const chatBox = document.getElementById('chatBox');
+      
+      currentChatCourseId = courseId;
+      currentChatTargetId = null;
+      if(chatInterval) clearInterval(chatInterval);
+
+      if (!courseId) {
+        targetList.innerHTML = '<div style="padding:15px; color:#999; text-align:center;">강의를 선택하세요</div>';
+        chatBox.innerHTML = '';
+        return;
+      }
+
+      try {
+        const res = await axios.get(`/message/targets?courseId=${courseId}`);
+        const targets = res.data || [];
+
+        if (!targets.length) {
+          targetList.innerHTML = '<div style="padding:15px; color:#999; text-align:center;">대화 상대가 없습니다.<br>(수강생이 없거나 교수님이 아닙니다)</div>';
+          return;
+        }
+
+        targetList.innerHTML = targets.map(t => `
+          <div class="user-item" onclick="openChatRoom('${t.id}', '${escapeHtml(t.name)}')">
+            <div style="font-weight:bold;">${escapeHtml(t.name)}</div>
+            <div class="tiny muted">${t.role === 'instructor' ? '교수님' : (t.studentId || '학생')}</div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+        targetList.innerHTML = '오류 발생';
+      }
+    }
+
+    async function openChatRoom(targetId, targetName) {
+      currentChatTargetId = targetId;
+      
+      const items = document.querySelectorAll('.user-item');
+      items.forEach(el => el.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+
+      const chatBox = document.getElementById('chatBox');
+      chatBox.innerHTML = `<div style="text-align:center; padding:10px; color:#666;"><b>${targetName}</b>님과의 대화</div>`;
+
+      loadMessages();
+      if(chatInterval) clearInterval(chatInterval);
+      chatInterval = setInterval(loadMessages, 3000);
+    }
+
+    async function loadMessages() {
+      if (!currentChatTargetId || !currentChatCourseId) return;
+      try {
+        const res = await axios.get(`/message/list?targetId=${currentChatTargetId}&courseId=${currentChatCourseId}`);
+        const msgs = res.data || [];
+        const chatBox = document.getElementById('chatBox');
+        
+        const header = chatBox.firstElementChild ? chatBox.firstElementChild.outerHTML : '';
+        
+        const html = msgs.map(m => {
+          const isMine = (m.senderId == userId);
+          const time = new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+          return `
+            <div class="message-bubble ${isMine ? 'msg-mine' : 'msg-other'}">
+              ${!isMine ? `<div class="msg-info">${escapeHtml(m.sender.name)}</div>` : ''}
+              <div>${escapeHtml(m.content)}</div>
+              <div class="msg-info" style="text-align:${isMine?'right':'left'}; margin-top:4px;">${time}</div>
+            </div>
+          `;
+        }).join('');
+
+        chatBox.innerHTML = header + html;
+        chatBox.scrollTop = chatBox.scrollHeight;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function sendMsg() {
+      const input = document.getElementById('msgInput');
+      const content = input.value;
+      if (!content.trim()) return;
+      if (!currentChatTargetId) { alert('대화 상대를 선택하세요.'); return; }
+
+      try {
+        await axios.post('/message/send', {
+          receiverId: currentChatTargetId,
+          courseId: currentChatCourseId,
+          content: content
+        });
+        input.value = '';
+        loadMessages();
+      } catch (err) {
+        alert('전송 실패');
+      }
+    }
+
+    // ======================
+    // ★★★ [수정됨] 세션/출석 (날짜, 휴강 여부 표시 적용) ★★★
+    // ======================
+    async function toggleSessions(courseId) {
+      const box = document.getElementById(`sessions-${courseId}`);
+      if (!box) return;
+
+      if (box.style.display === 'block') {
+        box.style.display = 'none';
+        return;
+      }
+
+      try {
+        const res = await axios.get(`/sessions/${courseId}`);
+        const sessions = res.data || [];
+        box.style.display = 'block';
+
+        let myStatus = {};
+        if (userRole === 'student') {
+          try {
+            const stRes = await axios.get(`/attendance/my-status/${courseId}`);
+            (stRes.data || []).forEach(x => { myStatus[x.sessionId] = x; });
+          } catch(e) {}
+        }
+
+        if (!sessions.length) {
+            box.innerHTML = '<p class="muted">등록된 주차별 수업이 없습니다.</p>';
+        } else {
+            box.innerHTML = sessions.map(s => {
+                // 날짜와 제목(휴강/보강) 처리
+                const isHoliday = s.title && s.title.includes('휴강');
+                const titleHtml = isHoliday 
+                  ? `<span style="color:#c62828; font-weight:bold;">⛔ ${escapeHtml(s.title)}</span>`
+                  : `<span>${escapeHtml(s.title || s.week + '주차 수업')}</span>`;
+                  
+                const dateBadge = s.date 
+                  ? `<span class="tag-date">📅 ${s.date}</span>` 
+                  : `<span class="tiny muted" style="margin-right:5px;">날짜미정</span>`;
+
+                const isCode = s.attendanceType === 'code';
+                const typeLabel = isCode ? '🔢 인증번호' : '📢 호명(교수님 확인)';
+                const statusPill = s.isOpen 
+                    ? `<span class="pill badge-green">출석 진행 중</span>` 
+                    : `<span class="pill muted">마감됨</span>`;
+
+                // 버튼 UI
+                let actionUI = '';
+                
+                if (userRole === 'instructor' || userRole === 'admin') {
+                    if (isHoliday) {
+                        actionUI = `<span class="tiny muted">휴강일입니다 (출석 없음)</span>`;
+                    } else {
+                        const btnText = s.isOpen ? '⛔ 마감하기' : '▶️ 출석 시작';
+                        const btnClass = s.isOpen ? 'btn-danger' : 'btn-success';
+                        
+                        const codeDisplay = (isCode && s.isOpen)
+                            ? `<span style="font-size:1.2em; font-weight:bold; color:#d32f2f; margin-right:10px;">CODE: ${s.authCode}</span>` 
+                            : '';
+
+                        const typeSelect = !s.isOpen ? `
+                            <select id="changeType-${s.id}" style="width:auto; padding:2px;">
+                                <option value="code" ${isCode ? 'selected' : ''}>인증번호</option>
+                                <option value="simple" ${!isCode ? 'selected' : ''}>호명출석</option>
+                            </select>
+                        ` : '';
+
+                        actionUI = `
+                            ${codeDisplay}
+                            ${typeSelect}
+                            <button class="${btnClass}" onclick="toggleSessionStatus(${s.id})">${btnText}</button>
+                            <button class="btn-primary" onclick="toggleSessionRoster(${s.id})">명단/체크</button>
+                        `;
+                    }
+                } 
+                else { // 학생인 경우
+                    const mine = myStatus[s.id];
+                    
+                    if (isHoliday) {
+                        actionUI = `<span class="tiny muted">휴강</span>`;
+                    }
+                    else if (mine && mine.statusText && mine.statusText !== '미출석') {
+                        actionUI = `<span style="font-weight:900; color:${mine.color}; font-size:1.1em;">${mine.statusText}</span>`;
+                    } 
+                    else if (s.isOpen) {
+                        if (isCode) {
+                            actionUI = `
+                                <div style="display:flex; gap:5px; justify-content:flex-end; align-items:center;">
+                                    <input type="text" id="code-input-${s.id}" placeholder="번호 4자리" style="width:80px; margin:0; text-align:center;">
+                                    <button class="btn-primary" onclick="studentCheckIn(${s.id})">출석하기</button>
+                                </div>
+                            `;
+                        } else {
+                            actionUI = `<span class="badge-blue">교수님이 출석 확인 중입니다...</span>`;
+                        }
+                    } else {
+                        actionUI = `<span class="muted">아직 수업 전이거나 마감됨</span>`;
+                    }
+                }
+
+                // 카드 렌더링
+                return `
+                  <div class="card" style="background:${isHoliday ? '#fff5f5' : (userRole==='student'?'#fff':'#f9f9f9')}; border-left:${userRole==='student'?'4px solid #ddd':'none'}; padding:12px; margin-bottom:10px;">
+                    <div class="row" style="align-items:center;">
+                      <div class="col">
+                        ${dateBadge}
+                        <h4 style="margin:4px 0;">${titleHtml}</h4>
+                        <div class="tiny muted">
+                            ${!isHoliday ? `${typeLabel} | ${statusPill}` : ''}
+                            ${s.startTime ? `| 시작: ${s.startTime}` : ''}
+                        </div>
+                      </div>
+                      <div class="col right">
+                        ${actionUI}
+                      </div>
+                    </div>
+                    <div id="roster-${s.id}" style="display:none; margin-top:10px;"></div>
+                  </div>
+                `;
+            }).join('');
+        }
+      } catch (err) {
+        console.error(err);
+        box.style.display = 'block';
+        box.innerHTML = '<p class="badge-red">오류 발생</p>';
+      }
+    }
+
+    // index.html 내의 toggleSessionStatus 함수를 아래와 같이 수정
+async function toggleSessionStatus(sessionId) {
+    const sel = document.getElementById(`changeType-${sessionId}`);
+    const attendanceType = sel ? sel.value : null;
+
+    try {
+        // 서버에 상태 변경 요청
+        const res = await axios.patch('/sessions/status', { sessionId, attendanceType });
+        
+        // 성공 시 메시지를 띄우고 페이지를 새로고침하여 바뀐 상태(마감하기 버튼 등)를 반영
+        alert(res.data.message);
+        
+        // ★ 핵심: 응답을 받은 후 확실하게 로딩을 다시 합니다.
+        // 단순히 location.reload()만 하면 비동기 충돌이 날 수 있으므로 아래와 같이 처리합니다.
+        window.location.reload(); 
+    } catch(err) {
+        console.error("상태 변경 에러:", err);
+        // 서버에서 이미 변경되었는데 에러로 빠지는 경우를 방지하기 위해 
+        // 에러 메시지가 '이미 변경됨'과 관련 있는지 확인하거나 상세 에러를 출력합니다.
+        if (err.response && err.response.data) {
+            alert('실패: ' + err.response.data.message);
+        } else {
+            alert('변경 중 오류가 발생했습니다. (새로고침 후 확인해보세요)');
+        }
+    }
+}
+
+    async function studentCheckIn(sessionId) {
+        const input = document.getElementById(`code-input-${sessionId}`);
+        const code = input ? input.value : '';
+
+        if (!code) { alert('인증번호를 입력하세요.'); return; }
+
+        try {
+            const res = await axios.post('/attendance/check', { sessionId, code });
+            alert(res.data.message); 
+            location.reload();
+        } catch (err) {
+            alert(err.response?.data?.message || '출석 실패');
+        }
+    }
+
+    async function toggleSessionRoster(sessionId) {
+  const box = document.getElementById(`roster-${sessionId}`);
+  if (!box) return;
+
+  // 1. 이미 명단이 열려있다면 닫기 (토글 기능)
+  if (box.style.display === 'block') {
+    box.style.display = 'none';
+    return;
+  }
+
+  // 2. [핵심] 명단을 새로 열기 전에 기존 내용을 비워 중복 출력을 방지합니다.
+  box.innerHTML = '<div class="tiny muted" style="padding:10px;">데이터를 불러오는 중...</div>';
+  box.style.display = 'block';
+
+  try {
+    const res = await axios.get(`/attendance/session/${sessionId}`);
+    const rows = res.data || [];
+
+    if (!rows.length) {
+      box.innerHTML = '<p class="muted" style="padding:10px;">출석 대상자가 없습니다.</p>';
+      return;
+    }
+
+    // 상태 코드(0~4)를 한글로 변환하는 내부 함수
+    const statusName = (v) => {
+      if (v == '0') return '미정';
+      if (v == '1') return '출석';
+      if (v == '2') return '지각';
+      if (v == '3') return '결석';
+      if (v == '4') return '공결';
+      return String(v);
+    };
+
+    // 3. 테이블 생성 (innerHTML을 통째로 갈아끼우므로 중복되지 않습니다)
+    box.innerHTML = `
+      <table style="width:100%; border-collapse: collapse; margin-top:10px; background:#fff;">
+        <thead>
+          <tr style="background:#f8f9fa;">
+            <th style="border:1px solid #ddd; padding:8px;">이름</th>
+            <th style="border:1px solid #ddd; padding:8px;">학번</th>
+            <th style="border:1px solid #ddd; padding:8px;">현재 상태</th>
+            <th style="border:1px solid #ddd; padding:8px;">상태 변경</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr style="border-bottom:1px solid #eee;">
+              <td style="padding:8px; border:1px solid #ddd;">${escapeHtml(r.student?.name || '-')}</td>
+              <td style="padding:8px; border:1px solid #ddd;">${escapeHtml(r.student?.studentId || '-')}</td>
+              <td style="padding:8px; border:1px solid #ddd;">
+                <b style="color:${r.status == '3' ? '#c62828' : (r.status == '0' ? '#777' : '#000')}">
+                  ${statusName(r.status)}
+                </b>
+              </td>
+              <td style="padding:8px; border:1px solid #ddd;">
+                <button class="btn-success" style="padding:4px 8px; font-size:11px;" 
+                        data-student-id="${r.student?.id}" data-session-id="${sessionId}" 
+                        onclick="changeAttendanceStatus('${r.id}', '1')">출석</button>
+                <button class="btn-warning" style="padding:4px 8px; font-size:11px;" 
+                        data-student-id="${r.student?.id}" data-session-id="${sessionId}" 
+                        onclick="changeAttendanceStatus('${r.id}', '2')">지각</button>
+                <button class="btn-danger"  style="padding:4px 8px; font-size:11px;" 
+                        data-student-id="${r.student?.id}" data-session-id="${sessionId}" 
+                        onclick="changeAttendanceStatus('${r.id}', '3')">결석</button>
+                <button class="btn-primary" style="padding:4px 8px; font-size:11px;" 
+                        data-student-id="${r.student?.id}" data-session-id="${sessionId}" 
+                        onclick="changeAttendanceStatus('${r.id}', '4')">공결</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (err) {
+    console.error("명단 로딩 에러:", err);
+    box.innerHTML = '<p class="badge-red" style="padding:10px;">명단을 불러오지 못했습니다.</p>';
+  }
+}
+
+   async function changeAttendanceStatus(id, status) {
+    if (!confirm('상태를 변경하시겠습니까?')) return;
+    
+    // 클릭된 버튼(event.target)에 저장된 data- 값을 직접 읽어옵니다. (가장 정확한 방법)
+    const btn = event.target;
+    const studentId = btn.getAttribute('data-student-id');
+    const sessionId = btn.getAttribute('data-session-id');
+
+    try {
+        // 서버 API(routes/attendance.js)가 요구하는 정보를 모두 담아 보냅니다.
+        const res = await axios.patch(`/attendance/${id}`, { 
+            status: status,
+            studentId: studentId, // 신규 생성 시 필수
+            sessionId: sessionId  // 신규 생성 시 필수
+        });
+        
+        alert(res.data.message || '정정 완료');
+        location.reload(); 
+    } catch (err) {
+        console.error("정정 에러:", err);
+        alert(err.response?.data?.message || '정정 실패: 정보를 확인하세요.');
+    }
+}
+
+    // ======================
+    // 공결
+    // ======================
+    const excuseForm = document.getElementById('excuseForm');
+    if (excuseForm) {
+      excuseForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          await axios.post('/excuse', new FormData(e.target));
+          alert('공결 신청 완료!');
+          e.target.reset();
+          loadMyExcuses();
+          loadNotifications();
+        } catch (err) {
+          console.error(err);
+          alert(err.response?.data?.message || '신청 실패');
+        }
+      });
+    }
+
+    async function loadMyExcuses() {
+      try {
+        const res = await axios.get('/excuse');
+        const list = res.data || [];
+        const box = document.getElementById('myExcuseList');
+        if (!box) return;
+        if (!list.length) { box.innerHTML = '<p class="muted">공결 신청 내역이 없습니다.</p>'; return; }
+        box.innerHTML = list.map(x => `<div class="card"><div><b>사유</b>: ${escapeHtml(x.reason || '')}</div><div class="tiny muted">상태: ${escapeHtml(x.status || '')}</div>${x.fileUrl ? `<div class="tiny"><a href="${x.fileUrl}" target="_blank">첨부 보기</a></div>` : ''}</div>`).join('');
+      } catch (err) { const box = document.getElementById('myExcuseList'); if (box) box.innerHTML = '<p class="badge-red">내역 불러오기 실패</p>'; }
+    }
+
+    // index.html 내의 loadPendingExcuses 함수를 아래 코드로 교체
+async function loadPendingExcuses() {
+  try {
+    const res = await axios.get('/excuse/pending');
+    const list = res.data || [];
+    const box = document.getElementById('pendingExcuseList');
+    if (!box) return;
+    
+    if (!list.length) { 
+      box.innerHTML = '<p class="muted">대기 중인 공결이 없습니다.</p>'; 
+      return; 
+    }
+
+    // [수정] 카드 내부에 x.fileUrl 확인 로직을 추가하여 증빙 서류 링크를 생성합니다.
+    box.innerHTML = list.map(x => `
+      <div class="card">
+        <div><b>학생</b>: ${escapeHtml(x.student?.name || '-')}</div>
+        <div><b>사유</b>: ${escapeHtml(x.reason || '')}</div>
+        <div class="tiny muted">상태: ${escapeHtml(x.status || '')}</div>
+        
+        ${x.fileUrl ? `
+          <div style="margin-top:5px; padding:5px; background:#f0f7ff; border-radius:4px;">
+            <a href="${x.fileUrl}" target="_blank" style="color:#007bff; font-size:12px; font-weight:bold;">
+              📎 증빙 서류 확인하기 (새 창)
+            </a>
+          </div>
+        ` : '<div class="tiny muted">첨부파일 없음</div>'}
+        
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <button class="btn-success" onclick="processExcuse(${x.id}, 'approved')">승인</button>
+          </div>
+          <div class="col">
+            <button class="btn-danger" onclick="processExcuse(${x.id}, 'rejected')">반려</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) { 
+    const box = document.getElementById('pendingExcuseList'); 
+    if (box) box.innerHTML = '<p class="badge-red">목록 불러오기 실패</p>'; 
+  }
+}
+    async function processExcuse(id, status) { try { await axios.patch(`/excuse/${id}`, { status }); alert('처리되었습니다.'); loadPendingExcuses(); loadNotifications(); } catch (err) { alert('처리 실패'); } }
+
+    // ======================
+    // 공지
+    // ======================
+    async function loadNotices() { try { const res = await axios.get('/notice'); const list = res.data || []; const box = document.getElementById('noticeList'); if(!box) return; if(!list.length){ box.innerHTML='<p class="muted">등록된 공지가 없습니다.</p>'; return; } box.innerHTML = list.map(n => `<div class="card"><h4 style="margin:0 0 6px;">📢 ${escapeHtml(n.title||'')}</h4><div class="left">${escapeHtml(n.content||'')}</div><div class="tiny muted" style="margin-top:8px;">작성자: ${escapeHtml(n.writer?.name||'-')}${n.course?` | 강의: ${escapeHtml(n.course.name)}`:''} | ${new Date(n.createdAt).toLocaleString()}</div></div>`).join(''); } catch(e){ document.getElementById('noticeList').innerHTML='<p class="badge-red">실패</p>'; } }
+    const noticeForm = document.getElementById('noticeForm'); if(noticeForm){ noticeForm.addEventListener('submit', async (e)=>{ e.preventDefault(); const courseId=document.getElementById('noticeCourseSelect')?.value; if(!courseId){alert('강의선택필수');return;} try{ await axios.post('/notice',{courseId, title:e.target.title.value, content:e.target.content.value}); alert('완료'); e.target.reset(); loadNotices(); loadNotifications(); }catch(e){alert('실패');} }); }
+
+    // ======================
+    // 투표
+    // ======================
+    async function loadOffvotes() { try{ const res=await axios.get('/offvote'); const votes=res.data||[]; const box=document.getElementById('offvoteList'); if(!box)return; if(!votes.length){ box.innerHTML='<p class="muted">투표 없음</p>'; return; } box.innerHTML=votes.map(v=>renderOffvoteCard(v)).join(''); }catch(e){ document.getElementById('offvoteList').innerHTML='<p class="badge-red">실패</p>'; } }
+    function renderOffvoteCard(v) { const isClosed=!v.isOpen; const courseName=v.course?.name||''; const title=escapeHtml(v.title); const desc=escapeHtml(v.description); let footer=''; if(userRole==='student'){ const opts=(v.options||[]).map(o=>`<button class="btn-primary" style="margin:6px 6px 0 0;" onclick="submitVote(${v.id}, ${o.id})">${escapeHtml(o.text)}</button>`).join(''); footer=`<div style="margin-top:10px;">${isClosed?'<div class="muted">종료됨</div>':opts}${isClosed?`<div style="margin-top:10px;"><button class="btn-ghost" onclick="viewOffvoteResult(${v.id})">결과보기</button><div id="offvote-result-${v.id}" style="margin-top:10px;display:none;"></div></div>`:''}</div>`; } else { footer=`<div style="margin-top:10px;">${!isClosed?`<button class="btn-danger" onclick="closeOffvote(${v.id})">종료</button>`:'<span class="pill">종료됨</span>'} <button class="btn-ghost" onclick="viewOffvoteResult(${v.id})">결과보기</button><div id="offvote-result-${v.id}" style="margin-top:10px;display:none;"></div></div>`; } return `<div class="card"><div class="tiny muted">강의: <b>${courseName}</b> ${isClosed?'<span class="pill badge-red">CLOSED</span>':'<span class="pill badge-green">OPEN</span>'}</div><h4>📊 ${title}</h4><div class="muted">${desc}</div>${footer}</div>`; }
+    const offvoteForm=document.getElementById('offvoteForm'); if(offvoteForm){ offvoteForm.addEventListener('submit', async(e)=>{ e.preventDefault(); const cid=document.getElementById('offvoteCourseSelect')?.value; const title=e.target.title.value; const desc=e.target.description.value; const opts=e.target.options.value.split('\n').map(s=>s.trim()).filter(Boolean); if(!opts.length){alert('옵션입력하세요');return;} try{ await axios.post('/offvote',{title, description:desc, courseId:cid, options:opts}); alert('생성완료'); e.target.reset(); loadOffvotes(); loadNotifications(); }catch(e){alert('실패');} }); }
+    async function submitVote(oid, optId){ try{ await axios.post(`/offvote/${oid}/vote`,{optionId:optId}); alert('투표완료'); loadOffvotes(); }catch(e){alert('실패');} }
+    async function closeOffvote(oid){ if(!confirm('종료?'))return; try{ await axios.patch(`/offvote/${oid}/close`); alert('종료됨'); loadOffvotes(); }catch(e){alert('실패');} }
+    async function viewOffvoteResult(oid){ const box=document.getElementById(`offvote-result-${oid}`); if(!box)return; if(box.style.display==='block'){box.style.display='none';return;} try{ const res=await axios.get(`/offvote/${oid}/result`); const data=res.data; box.style.display='block'; const total=(data.options||[]).reduce((a,b)=>a+(b.count||0),0); box.innerHTML=`<div class="card" style="background:#fafafa; border:1px dashed #ddd;"><div class="tiny muted">총 투표: <b>${total}</b></div><table><thead><tr><th>옵션</th><th>득표</th><th>%</th></tr></thead><tbody>${(data.options||[]).map(o=>{ const pct=total>0?Math.round(((o.count||0)/total)*100):0; return `<tr><td class="left">${escapeHtml(o.text)}</td><td><b>${o.count||0}</b></td><td>${pct}%</td></tr>`; }).join('')}</tbody></table></div>`; }catch(e){ box.innerHTML='실패'; } }
+
+    // ======================
+    // 출석 리포트 & 알림 & 로그
+    // ======================
+   // index.html 내부 스크립트의 해당 함수를 아래 코드로 교체하세요.
+async function loadAttendanceReport() {
+    const cid = document.getElementById('reportCourseSelect')?.value;
+    const box = document.getElementById('reportResult');
+    if (!box) return;
+    if (!cid) {
+        box.innerHTML = '<p class="muted">강의를 선택하세요.</p>';
+        return;
+    }
+
+    try {
+        const res = await axios.get(`/attendance/stats/${cid}`);
+        const rows = res.data || [];
+        
+        if (!rows.length) {
+            box.innerHTML = '<p class="muted">출석 데이터가 없습니다.</p>';
+            return;
+        }
+
+        // [수정 사항] 표 헤더에 '공결' 추가 및 데이터 필드 매칭
+        box.innerHTML = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>이름</th>
+                        <th>출석</th>
+                        <th>지각</th>
+                        <th>결석</th> 
+                        <th>공결</th> <th>지각->결석 횟수</th> 
+                        <th>최종결석</th>
+                        <th>출석률</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(r => `
+                        <tr style="${r.isDanger ? 'background:#ffebee;' : ''}">
+                            <td>${escapeHtml(r.name)}</td>
+                            <td class="badge-blue">${r.presentCount}</td>
+                            <td class="badge-orange">${r.remainingLates}</td>
+                            <td class="badge-red">${r.pureAbsent}</td> 
+                            <td class="badge-blue">${r.excuseCount}</td> <td class="muted">${r.conversionCount}</td> 
+                            <td style="color:#c62828; font-weight:bold;">${r.finalAbsentCount}</td>
+                            <td><b>${r.rate}%</b></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (e) {
+        console.error("리포트 로딩 실패:", e);
+        box.innerHTML = '<p class="badge-red">데이터를 불러오는 데 실패했습니다.</p>';
+    }
+}
+    async function loadNotifications() { try{ const res=await axios.get('/notifications'); const list=res.data||[]; const box=document.getElementById('notificationList'); if(!box)return; if(!list.length){box.innerHTML='<p class="muted">알림 없음</p>';return;} box.innerHTML=list.map(n=>`<div class="card ${n.isRead?'noti-read':'noti-unread'}"><div><b>${escapeHtml(n.title||'')}</b></div><div>${escapeHtml(n.message||'')}</div><div class="tiny muted" style="margin-top:6px;">${new Date(n.createdAt).toLocaleString()} ${n.isRead?'읽음':'새 알림'}</div>${!n.isRead?`<div style="margin-top:8px;"><button class="btn-success" onclick="markNotificationRead(${n.id})">읽음</button></div>`:''}</div>`).join(''); }catch(e){ if(document.getElementById('notificationList')) document.getElementById('notificationList').innerHTML='실패'; } }
+    async function markNotificationRead(id){ try{ await axios.patch(`/notifications/${id}/read`); loadNotifications(); }catch(e){} }
+    async function markAllNotificationsRead(){ if(!confirm('전체읽음?'))return; try{ await axios.patch('/notifications/read/all'); loadNotifications(); }catch(e){} }
+
+    // ★★★ [수정됨] 감사 로그를 보기 좋은 '표(Table)' 형태로 출력하는 함수
+    async function loadAuditLogs() {
+      const limitInput = document.getElementById('auditLimit');
+      const limit = limitInput ? limitInput.value : '';
+      const q = limit ? `?limit=${limit}` : '';
+      
+      const box = document.getElementById('auditList');
+      if (!box) return;
+
+      box.innerHTML = '<div class="tiny muted">로그 데이터를 불러오는 중입니다...</div>';
+
+      try {
+        // API 경로가 /audit 인지 /admin/audit-logs 인지 상황에 맞게 호출
+        let res;
+        try {
+            res = await axios.get(`/admin/audit-logs${q}`);
+        } catch (e) {
+            res = await axios.get(`/audit${q}`);
+        }
+
+        const logs = res.data || [];
+
+        if (!logs.length) {
+          box.innerHTML = '<p class="muted">기록된 감사 로그가 없습니다.</p>';
+          return;
+        }
+
+        // 테이블 헤더 생성
+        let html = `
+          <table style="width:100%; font-size:12px; table-layout: fixed;">
+            <colgroup>
+                <col style="width: 140px;">
+                <col style="width: 100px;">
+                <col style="width: 160px;">
+                <col>
+                <col style="width: 100px;">
+            </colgroup>
+            <thead>
+              <tr style="background:#eee;">
+                <th>📅 일시</th>
+                <th>👤 수행자</th>
+                <th>⚡ 활동 (Action)</th>
+                <th>📝 상세 내용 (Details)</th>
+                <th>🌐 IP</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+
+        // 로그 데이터 한 줄씩 생성
+        html += logs.map(l => {
+          const time = new Date(l.createdAt).toLocaleString();
+          
+          // 수행자 정보 (이름 + 권한)
+          const actorInfo = l.actor 
+            ? `<b>${escapeHtml(l.actor.name)}</b><br><span class="tiny muted">(${l.actor.role})</span>` 
+            : '<span class="muted">시스템</span>';
+
+          // 상세 내용 (JSON 문자열이면 예쁘게 보여주기)
+          let detailDisplay = '-';
+          if (l.details) {
+            try {
+                // JSON 파싱 시도
+                const parsed = JSON.parse(l.details);
+                // JSON이면 key: value 형태로 깔끔하게 출력
+                detailDisplay = '<div style="text-align:left; font-family:monospace; background:#fafafa; padding:4px; border-radius:4px; overflow-x:auto;">';
+                for (const [key, val] of Object.entries(parsed)) {
+                    // before/after가 있는 경우 (수정 로그) 강조
+                    if(key === 'before') detailDisplay += `<div style="color:#d32f2f;">[이전] ${JSON.stringify(val)}</div>`;
+                    else if(key === 'after') detailDisplay += `<div style="color:#2e7d32;">[변경] ${JSON.stringify(val)}</div>`;
+                    else detailDisplay += `<div><span style="color:#555;">${key}:</span> ${val}</div>`;
+                }
+                detailDisplay += '</div>';
+            } catch (e) {
+                // JSON 아니면 그냥 텍스트 출력
+                detailDisplay = `<div style="text-align:left;">${escapeHtml(l.details)}</div>`;
+            }
+          }
+
+          return `
+            <tr style="border-bottom:1px solid #eee;">
+              <td>${time}</td>
+              <td>${actorInfo}</td>
+              <td style="color:#008CBA; font-weight:bold;">${escapeHtml(l.action)}</td>
+              <td class="left">${detailDisplay}</td>
+              <td class="tiny muted">${l.ipAddress || '-'}</td>
+            </tr>
+          `;
+        }).join('');
+
+        html += `</tbody></table>`;
+        box.innerHTML = html;
+
+      } catch (err) {
+        console.error(err);
+        box.innerHTML = '<p class="badge-red">로그를 불러오지 못했습니다.</p>';
+      }
+    }
+
+    // ======================
+    // [수정됨] 학과 관리
+    // ======================
+    async function loadDepartments() {
+      const box = document.getElementById('deptList');
+      if (!box) return;
+      try {
+        const res = await axios.get('/admin/departments');
+        const list = res.data || [];
+
+        if (!list.length) {
+          box.innerHTML = '<p class="muted">등록된 학과가 없습니다.</p>';
+          return;
+        }
+
+        box.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>학과명</th>
+                <th>학과코드</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(d => `
+                <tr>
+                  <td class="left">${escapeHtml(d.name)}</td>
+                  <td>${escapeHtml(d.code || '-')}</td>
+                  <td>
+                    <button class="btn-warning" style="padding:6px 10px; font-size:12px;" onclick="quickUpdateDept(${d.id})">수정</button>
+                    <button class="btn-danger"  style="padding:6px 10px; font-size:12px;" onclick="deleteDepartment(${d.id})">삭제</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        console.error(err);
+        box.innerHTML = '<p class="badge-red">학과 목록 불러오기 실패</p>';
+      }
+    }
+
+    async function createDepartment() {
+      const name = document.getElementById('deptName')?.value?.trim();
+      const code = document.getElementById('deptCode')?.value?.trim() || null;
+
+      if (!name) { alert('학과명을 입력하세요'); return; }
+
+      try {
+        await axios.post('/admin/departments', { name, code });
+        alert('학과 생성 완료');
+        document.getElementById('deptName').value = '';
+        document.getElementById('deptCode').value = '';
+        loadDepartments();
+        loadAdminCourseOptions(); 
+      } catch (err) {
+        console.error(err);
+        alert(err.response?.data?.message || '학과 생성 실패');
+      }
+    }
+
+    async function quickUpdateDept(id) {
+      const name = prompt('새 학과명(비우면 변경 안 함):');
+      const code = prompt('바꿀 학과코드(비우면 변경 안 함):');
+      
+      const payload = {};
+      if (name !== null && name !== '') payload.name = name;
+      if (code !== null && code !== '') payload.code = code;
+
+      if (!Object.keys(payload).length) return;
+
+      try {
+        await axios.patch(`/admin/departments/${id}`, payload);
+        alert('수정 완료');
+        loadDepartments();
+        loadAdminCourseOptions();
+      } catch (err) {
+        console.error(err);
+        alert(err.response?.data?.message || '수정 실패');
+      }
+    }
+
+    async function deleteDepartment(id){ if(!confirm('삭제?'))return; try{ await axios.delete(`/admin/departments/${id}`); alert('완료'); loadDepartments(); }catch(e){alert('실패');} }
+
+    // ======================
+    // ★★★ [수정됨] 학기 관리 ★★★
+    // ======================
+    async function loadSemesters() {
+      const box = document.getElementById('semList');
+      if (!box) return;
+
+      try {
+        const res = await axios.get('/admin/semesters');
+        const list = res.data || [];
+
+        if (!list.length) {
+          box.innerHTML = '<p class="muted">학기가 없습니다.</p>';
+          return;
+        }
+
+        // [수정] ID, 활성 컬럼 제거 / 이름 -> 학기
+        box.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>학기</th>
+                <th>기간</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(s => `
+                <tr>
+                  <td class="left">${escapeHtml(s.name)}</td>
+                  <td>${escapeHtml(String(s.startDate || '').slice(0,10))} ~ ${escapeHtml(String(s.endDate || '').slice(0,10))}</td>
+                  <td>
+                    <button class="btn-warning" style="padding:6px 10px; font-size:12px;" onclick="quickUpdateSemester(${s.id})">수정</button>
+                    <button class="btn-danger"  style="padding:6px 10px; font-size:12px;" onclick="deleteSemester(${s.id})">삭제</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        console.error(err);
+        box.innerHTML = '<p class="badge-red">학기 목록 불러오기 실패</p>';
+      }
+    }
+
+    async function createSemester() {
+      const name = document.getElementById('semName')?.value?.trim();
+      const startDate = document.getElementById('semStart')?.value || null;
+      const endDate = document.getElementById('semEnd')?.value || null;
+
+      if (!name || !startDate || !endDate) {
+        alert('학기명/시작일/종료일을 모두 입력하세요');
+        return;
+      }
+
+      try {
+        await axios.post('/admin/semesters', { name, startDate, endDate });
+        alert('학기 생성 완료');
+        document.getElementById('semName').value = '';
+        document.getElementById('semStart').value = '';
+        document.getElementById('semEnd').value = '';
+        loadSemesters();
+      } catch (err) {
+        console.error(err);
+        alert(err.response?.data?.message || '학기 생성 실패');
+      }
+    }
+
+    async function quickUpdateSemester(id) {
+      // [수정] 새 이름 -> 바꿀 학기
+      const name = prompt('바꿀 학기(비우면 변경 안 함):');
+      const startDate = prompt('새 시작일(YYYY-MM-DD, 비우면 변경 안 함):');
+      const endDate = prompt('새 종료일(YYYY-MM-DD, 비우면 변경 안 함):');
+      
+      // [수정] 활성 여부 질문 제거
+
+      const payload = {};
+      if (name !== null && name !== '') payload.name = name;
+      if (startDate !== null && startDate !== '') payload.startDate = startDate;
+      if (endDate !== null && endDate !== '') payload.endDate = endDate;
+
+      if (!Object.keys(payload).length) return;
+
+      try {
+        await axios.patch(`/admin/semesters/${id}`, payload);
+        alert('수정 완료');
+        loadSemesters();
+      } catch (err) {
+        console.error(err);
+        alert(err.response?.data?.message || '수정 실패');
+      }
+    }
+
+    async function deleteSemester(id){ if(!confirm('삭제?'))return; try{ await axios.delete(`/admin/semesters/${id}`); alert('완료'); loadSemesters(); }catch(e){alert('실패');} }
+
+    async function loadSystemSettings() { const box=document.getElementById('settingsBox'); if(!box)return; try{ const res=await axios.get('/admin/settings'); const list=res.data||[]; if(!list.length){box.innerHTML='없음';return;} box.innerHTML=`<table><thead><tr><th>KEY</th><th>VALUE</th></tr></thead><tbody>${list.map(s=>`<tr><td class="left"><b>${s.key}</b></td><td class="left">${escapeHtml(s.value)}</td></tr>`).join('')}</tbody></table>`; }catch(e){ box.innerHTML='실패'; } }
+    async function updateSystemSetting(){ const k=document.getElementById('setKey').value; const v=document.getElementById('setValue').value; if(!k){alert('키 필수');return;} try{ await axios.patch('/admin/settings',{key:k, value:v}); alert('완료'); loadSystemSettings(); }catch(e){alert('실패');} }
+
+    // ======================
+    // ★★★ [수정됨] 관리자: 사용자 목록 & 권한/수정/삭제 ★★★
+    // ======================
+    async function loadAdminUsers() {
+      const box = document.getElementById('adminUsersBox');
+      if (!box) return;
+      
+      try {
+        const res = await axios.get('/admin/users');
+        const list = res.data || [];
+        if (!list.length) { box.innerHTML = '<p class="muted">사용자 없음</p>'; return; }
+
+        box.innerHTML = `
+          <table>
+            <thead><tr><th>이름</th><th>이메일</th><th>학번</th><th>역할</th><th>관리</th></tr></thead>
+            <tbody>
+              ${list.map(u => `
+                <tr>
+                  <td class="left">${escapeHtml(u.name || '')}</td>
+                  <td class="left">${escapeHtml(u.email || '')}</td>
+                  <td>${escapeHtml(u.studentId || '')}</td>
+                  <td><b>${escapeHtml(u.role || '')}</b></td>
+                  <td>
+                    <button class="btn-warning" style="padding:4px 8px; font-size:12px; margin-right:2px;" onclick="changeUserRole('${u.id}', '${u.role}', '${u.name}')">권한</button>
+                    <button class="btn-primary" style="padding:4px 8px; font-size:12px; margin-right:2px;" 
+                      onclick="editAdminUser('${u.id}', '${escapeHtml(u.name)}', '${escapeHtml(u.email)}', '${escapeHtml(u.studentId||'')}', '${u.role}')">
+                      수정
+                    </button>
+                    <button class="btn-danger" style="padding:4px 8px; font-size:12px;" onclick="deleteAdminUser('${u.id}', '${escapeHtml(u.name)}')">삭제</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        console.error(err);
+        box.innerHTML = '<p class="badge-red">사용자 목록 불러오기 실패</p>';
+      }
+    }
+
+    // [유지] 권한 변경 (빠른 스위칭용)
+    async function changeUserRole(id, currentRole, name) {
+      let newRole = (currentRole === 'student') ? 'instructor' : 'student';
+      if (!['student', 'instructor'].includes(currentRole)) {
+        newRole = prompt('변경할 권한을 입력하세요 (student / instructor / admin):', currentRole);
+        if(!newRole) return;
+      } else {
+        if (!confirm(`'${name}' 님의 권한을 [${currentRole}]에서 [${newRole}]로 변경하시겠습니까?`)) return;
+      }
+
+      try {
+        await axios.patch(`/admin/users/${id}`, { role: newRole });
+        alert('권한이 변경되었습니다.');
+        loadAdminUsers();
+        loadAdminCourseOptions();
+      } catch (err) {
+        console.error(err);
+        alert('권한 변경 실패');
+      }
+    }
+
+    // ★★★ [수정됨] 사용자 정보 전체 수정 (역할 Role 입력창 제거) ★★★
+    async function editAdminUser(id, oldName, oldEmail, oldStdId, oldRole) {
+      const newName = prompt("이름:", oldName);
+      if (newName === null) return;
+
+      const newEmail = prompt("이메일:", oldEmail);
+      if (newEmail === null) return;
+
+      const newStdId = prompt("학번:", oldStdId);
+      if (newStdId === null) return;
+
+      // 역할 입력 부분 삭제함 (권한 변경은 별도 버튼으로 수행)
+
+      try {
+        // 서버 전송 시 role 필드 제외
+        await axios.patch(`/admin/users/${id}`, {
+          name: newName,
+          email: newEmail,
+          studentId: newStdId
+        });
+        alert("정보가 수정되었습니다.");
+        loadAdminUsers();
+        loadAdminCourseOptions();
+      } catch (err) {
+        console.error(err);
+        alert(err.response?.data?.message || "수정 실패");
+      }
+    }
+
+    // [추가] 사용자 삭제
+    async function deleteAdminUser(id, name) {
+      if (!confirm(`정말 '${name}' 사용자를 영구 삭제하시겠습니까?`)) return;
+
+      try {
+        await axios.delete(`/admin/users/${id}`);
+        alert('삭제되었습니다.');
+        loadAdminUsers();
+        loadAdminCourseOptions();
+      } catch (err) {
+        console.error(err);
+        alert(err.response?.data?.message || '삭제 실패');
+      }
+    }
+
+    async function createAdminUser() {
+      const name = document.getElementById('newUserNameUser').value;
+      const email = document.getElementById('newUserEmail').value;
+      const password = document.getElementById('newUserPwd').value;
+      const studentId = document.getElementById('newUserStdId').value;
+      const role = document.getElementById('newUserRole').value;
+
+      if (!name || !email || !password) {
+        alert('이름, 이메일, 비밀번호는 필수입니다.');
+        return;
+      }
+
+      try {
+        await axios.post('/admin/users', { name, email, password, studentId, role });
+        alert('사용자가 등록되었습니다.');
+        // 입력창 초기화
+        document.getElementById('newUserNameUser').value = '';
+        document.getElementById('newUserEmail').value = '';
+        document.getElementById('newUserPwd').value = '';
+        document.getElementById('newUserStdId').value = '';
+        loadAdminUsers();
+        loadAdminCourseOptions(); // 교수님 추가됐을 수도 있으니 갱신
+      } catch (err) {
+        console.error(err);
+        alert(err.response?.data?.message || '등록 실패');
+      }
+    }
+
+    // ★★★ [수정됨] 과목 목록: ID 제거, 수정/삭제 버튼 추가 ★★★
+    async function loadAdminCourses() {
+      const box = document.getElementById('adminCoursesBox');
+      if(!box) return;
+      try {
+        const res = await axios.get('/admin/courses');
+        const list = res.data || [];
+        if (!list.length) { box.innerHTML = '<p class="muted">과목 없음</p>'; return; }
+        
+        box.innerHTML = `
+          <table>
+            <thead><tr><th>과목</th><th>교수</th><th>학과</th><th>학기</th><th>관리</th></tr></thead>
+            <tbody>${list.map(c => {
+              const iName = c.instructor?.name || '';
+              const dName = c.department?.name || '';
+              const sName = c.semester?.name || '';
+              // 인자 전달 시 문자열 처리를 위해 escape
+              const safeName = escapeHtml(c.name);
+              
+              return `<tr>
+                <td class="left">${safeName}</td>
+                <td>${escapeHtml(iName)}</td>
+                <td>${escapeHtml(dName)}</td>
+                <td>${escapeHtml(sName)}</td>
+                <td>
+                  <button class="btn-primary" style="padding:4px 8px; font-size:12px; margin-right:2px;"
+                    onclick="openAdminCourseEditor(${c.id}, '${safeName}', '${c.instructorId||''}', '${c.departmentId||''}', '${c.semesterId||''}')">
+                    수정
+                  </button>
+                  <button class="btn-danger" style="padding:4px 8px; font-size:12px;" onclick="deleteAdminCourse(${c.id}, '${safeName}')">삭제</button>
+                </td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table>
+        `;
+      } catch(e) { 
+        console.error(e);
+        box.innerHTML = '<p class="badge-red">실패</p>'; 
+      }
+    }
+
+    // ★★★ [추가됨] 과목 수정 팝업 열기 (여기서 데이터를 확실하게 불러옴!) ★★★
+    async function openAdminCourseEditor(id, name, instrId, deptId, semId) {
+      document.getElementById('courseEditCard').style.display = 'block';
+      document.getElementById('editCourseId').value = id;
+      document.getElementById('editCourseName').value = name;
+
+      // 1. 데이터를 확실하게 새로 불러오기
+      try {
+        // 병렬로 API 호출해서 데이터를 다 가져옴
+        const [uRes, dRes, sRes] = await Promise.all([
+           axios.get('/admin/users'),
+           axios.get('/admin/departments'),
+           axios.get('/admin/semesters')
+        ]);
+
+        // 2. 교수님 세팅
+        const instructors = uRes.data.filter(u => u.role === 'instructor');
+        const iSel = document.getElementById('editCourseInstructor');
+        iSel.innerHTML = '<option value="">선택하세요</option>' +
+           instructors.map(u => `<option value="${u.id}" ${u.id == instrId ? 'selected' : ''}>${u.name} (${u.email})</option>`).join('');
+
+        // 3. 학과 세팅
+        const dSel = document.getElementById('editCourseDept');
+        dSel.innerHTML = '<option value="">선택하세요</option>' +
+           dRes.data.map(d => `<option value="${d.id}" ${d.id == deptId ? 'selected' : ''}>${d.name}</option>`).join('');
+
+        // 4. 학기 세팅
+        const sSel = document.getElementById('editCourseSem');
+        sSel.innerHTML = '<option value="">선택하세요</option>' +
+           sRes.data.map(s => `<option value="${s.id}" ${s.id == semId ? 'selected' : ''}>${s.name}</option>`).join('');
+
+      } catch(e) {
+        console.error(e);
+        alert('데이터 로딩 실패');
+      }
+
+      location.href = "#courseEditCard";
+    }
+
+    function closeCourseEditor() {
+      document.getElementById('courseEditCard').style.display = 'none';
+    }
+
+    // ★★★ [추가됨] 과목 수정 저장 ★★★
+    async function saveCourseChanges() {
+      const id = document.getElementById('editCourseId').value;
+      const name = document.getElementById('editCourseName').value;
+      const instructorId = document.getElementById('editCourseInstructor').value;
+      const departmentId = document.getElementById('editCourseDept').value;
+      const semesterId = document.getElementById('editCourseSem').value;
+
+      if(!id) return;
+
+      try {
+        await axios.patch(`/admin/courses/${id}`, {
+          name, 
+          instructorId: instructorId || null,
+          departmentId: departmentId || null,
+          semesterId: semesterId || null
+        });
+        alert('과목 정보가 수정되었습니다.');
+        closeCourseEditor();
+        loadAdminCourses(); // 목록 갱신
+      } catch(err) {
+        console.error(err);
+        alert(err.response?.data?.message || '수정 실패');
+      }
+    }
+
+    // ★★★ [추가됨] 과목 삭제 ★★★
+    async function deleteAdminCourse(id, name) {
+      if(!confirm(`정말 '${name}' 과목을 삭제하시겠습니까? (수강생, 출석기록 등 모두 삭제될 수 있습니다)`)) return;
+      try {
+        await axios.delete(`/admin/courses/${id}`);
+        alert('삭제되었습니다.');
+        loadAdminCourses();
+      } catch(err) {
+        console.error(err);
+        alert(err.response?.data?.message || '삭제 실패');
+      }
+    }
+
+    async function loadAdminReport() { const box=document.getElementById('adminReportBox'); if(!box)return; try{ const res=await axios.get('/admin/reports/stats'); const d=res.data||{}; box.innerHTML=`<div class="card" style="background:#fafafa;"><div><b>요약</b></div><div class="row" style="margin-top:10px;"><div class="col">User:${d.users}</div><div class="col">Course:${d.courses}</div><div class="col">Attend:${d.attendances}</div></div></div>`; }catch(e){ box.innerHTML='실패'; } }
+
+    function escapeHtml(str) { if(str===null||str===undefined)return ''; return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'", "&#039;"); }
+
+    // ★★★ [중요] 관리자 코스 옵션 로딩 (안전장치 추가) ★★★
+    // 하나가 실패해도 나머지는 뜨도록 try-catch 분리
+    // ★★★ [수정됨] 관리자 코스 옵션 로딩 (안전장치 추가)
+    // 기존 함수를 지우고 이 코드를 그대로 붙여넣으세요.
+    async function loadAdminCourseOptions() {
+      console.log("옵션 로딩 시작...");
+
+      // 1. 교수님 불러오기 (실패해도 다음 단계로 넘어감)
+      try {
+        const res = await axios.get('/admin/users');
+        // role이 instructor인 사람만 필터링
+        const instructors = (res.data || []).filter(u => u.role === 'instructor');
+        const el = document.getElementById('newCourseInstructor');
+        
+        // 요소가 화면에 있을 때만 실행 (에러 방지)
+        if (el) {
+           el.innerHTML = '<option value="">교수님을 선택하세요</option>' + 
+            instructors.map(u => `<option value="${u.id}">${u.name} (${u.email})</option>`).join('');
+        }
+      } catch (e) { console.error("교수님 목록 로딩 실패", e); }
+
+      // 2. 학과 불러오기
+      try {
+        const res = await axios.get('/admin/departments');
+        const el = document.getElementById('newCourseDept');
+        if (el) {
+           el.innerHTML = '<option value="">학과 선택 (선택사항)</option>' + 
+            (res.data || []).map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+        }
+      } catch (e) { console.error("학과 목록 로딩 실패", e); }
+
+      // 3. 학기 불러오기
+      try {
+        const res = await axios.get('/admin/semesters');
+        const el = document.getElementById('newCourseSem');
+        if (el) {
+           el.innerHTML = '<option value="">학기 선택 (선택사항)</option>' + 
+            (res.data || []).map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        }
+      } catch (e) { console.error("학기 목록 로딩 실패", e); }
+    }
+    // 과목 생성 (스마트 스케줄러)
+    // ★★★ [수정됨] 강의 생성 (요일/날짜 포함 + 에러 방지) ★★★
+    async function createAdminCourse() {
+      const name = document.getElementById('newCourseName').value;
+      const instructorId = document.getElementById('newCourseInstructor').value;
+      const departmentId = document.getElementById('newCourseDept').value;
+      const semesterId = document.getElementById('newCourseSem').value;
+      
+      // 새로 추가된 요일/날짜 값 가져오기 (화면에 없으면 기본값 사용)
+      const dayEl = document.getElementById('newCourseDay');
+      const startEl = document.getElementById('newCourseStart');
+      
+      // 값이 없으면 각각 1(월요일), 2025-09-01로 설정
+      const dayOfWeek = dayEl ? dayEl.value : 1;
+      const startDate = startEl ? startEl.value : '2025-09-01';
+
+      if (!name || !instructorId) { alert('과목명과 교수님은 필수입니다.'); return; }
+
+      try {
+        await axios.post('/admin/courses', {
+          name, instructorId, departmentId, semesterId,
+          dayOfWeek, startDate // 서버로 전송
+        });
+        alert('과목 및 일정이 생성되었습니다!');
+        
+        // 입력창 초기화
+        document.getElementById('newCourseName').value = '';
+        
+        // 목록 새로고침
+        loadAdminCourses(); 
+      } catch (err) { 
+        console.error(err);
+        alert('실패: ' + (err.response?.data?.message || err.message)); 
+      }
+    }
+    async function saveSystemSettings() {
+        const lateToAbsent = document.getElementById('lateToAbsentInput')?.value;
+        const warningThreshold = document.getElementById('warningThresholdInput')?.value;
+
+        if (!lateToAbsent || !warningThreshold) {
+            alert('모든 값을 입력해주세요.');
+            return;
+        }
+
+        try {
+            // 이전에 수정한 admin.js의 bulk API 주소로 데이터를 보냅니다.
+            const res = await axios.post('/admin/settings/bulk', {
+                lateToAbsent: parseInt(lateToAbsent),
+                warningThreshold: parseInt(warningThreshold)
+            });
+
+            alert(res.data.message || '저장되었습니다.');
+            if (typeof loadAuditLogs === 'function') loadAuditLogs(); // 로그 갱신
+        } catch (e) {
+            alert('저장에 실패했습니다.');
+        }
+    }
+  </script>
+</body>
+</html>
